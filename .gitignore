@@ -163,3 +163,4 @@ third_party/
 *.zip
 *.mp4
 *.npy
+*.whl
