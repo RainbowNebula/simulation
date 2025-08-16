@@ -1,0 +1,45 @@
+task_name: grasp_cube
+save_freq: 10
+seed: 66
+use_seed: false
+collect_data: true
+save_path: /home/data/robotwin
+dual_arm: false
+st_episode: 0
+pcd_crop: true
+pcd_down_sample_num: 1024
+episode_num: 100
+save_type:
+  raw_data: true
+  pkl: false
+data_type:
+  rgb: true
+  observer: true
+  depth: false
+  pointcloud: false
+  endpose: false
+  qpos: false
+  mesh_segmentation: false
+  actor_segmentation: false
+entities:
+  cube:
+    file_path: 
+    scale:
+    pos:
+    eluer:
+  box:
+    file_path: 
+    scale:
+    pos:
+    eluer:
+cmeras:
+  head_camera: 
+    type: D455
+    pos:
+    lookat: 
+  front_camera: 
+    type: D455
+    pos:
+    lookat: 
+is_save: false
+

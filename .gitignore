@@ -162,3 +162,4 @@ third_party/
 *.gif
 *.zip
 *.mp4
+*.npy

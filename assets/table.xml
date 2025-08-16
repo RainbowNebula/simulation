@@ -1,0 +1,54 @@
+<mujoco>
+  <!-- 模型元数据 -->
+  <option timestep="0.01" integrator="RK4"/>
+  <compiler angle="radian" coordinate="local" meshdir="."/>
+  
+  <asset>
+    <!-- 材质定义 -->
+    <material name="green" rgba="0.0745 0.6353 0.5568 1"/>  <!-- 绿色桌面 -->
+    <material name="white" rgba="1 1 1 1"/>  <!-- 白色桌脚 -->
+  </asset>
+  
+  <!-- 物理世界主体 -->
+  <worldbody>
+    <!-- 桌面 - 绿色立方体 -->
+    <body name="table_top" pos="0 0 0.8">
+      <geom name="top_geom" type="box" size="0.75 0.4 0.05" material="green"/>
+    </body>
+    
+    <!-- 桌脚1 - 左下角 -->
+    <body name="leg1" pos="-0.65 0.3 0.4">
+      <geom name="leg1_geom" type="box" size="0.05 0.05 0.4" material="white"/>
+    </body>
+    
+    <!-- 桌脚2 - 右下角 -->
+    <body name="leg2" pos="0.65 0.3 0.4">
+      <geom name="leg2_geom" type="box" size="0.05 0.05 0.4" material="white"/>
+    </body>
+    
+    <!-- 桌脚3 - 左上角 -->
+    <body name="leg3" pos="-0.65 -0.3 0.4">
+      <geom name="leg3_geom" type="box" size="0.05 0.05 0.4" material="white"/>
+    </body>
+    
+    <!-- 桌脚4 - 右上角 -->
+    <body name="leg4" pos="0.65 -0.3 0.4">
+      <geom name="leg4_geom" type="box" size="0.05 0.05 0.4" material="white"/>
+    </body>
+  </worldbody>
+  
+
+  <!-- <physics>
+    <default>
+      <joint armature="0.1" damping="1" frictionloss="0.1"/>
+      <geom density="1000" friction="0.5 0.1 0.1" solref="0.02 1"/>
+    </default>
+  </physics> -->
+  
+  <!-- 可视化设置 - 建议放在physics之后或worldbody之后 -->
+  <visual>
+    <headlight diffuse="0.8 0.8 0.8" specular="0.5 0.5 0.5"/>
+    <map fogstart="10" fogend="100"/>
+  </visual>
+
+</mujoco>

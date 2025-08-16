@@ -1,0 +1,16 @@
+Fatal Python error: Segmentation fault
+
+Thread 0x00007cbc1a1b2740 (most recent call first):
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_geom.py", line 245 in _compute_sd
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_geom.py", line 172 in _preprocess
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_geom.py", line 115 in __init__
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_link.py", line 211 in _add_geom
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_entity.py", line 769 in _add_by_info
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_entity.py", line 253 in _load_mesh
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_entity.py", line 94 in _load_model
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/entities/rigid_entity/rigid_entity.py", line 86 in __init__
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/solvers/rigid/rigid_solver_decomp.py", line 165 in add_entity
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/simulator.py", line 162 in _add_entity
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/engine/scene.py", line 395 in add_entity
+  File "/home/lab/anaconda3/envs/genesis/lib/python3.12/site-packages/genesis/utils/misc.py", line 136 in wrapper
+  File "/workspace/simulation/base.py", line 201 in add_objects
