@@ -399,36 +399,44 @@ class BaseEnv:
         2. 再移动机械臂到目标位置
         '''
         self.save_data = save_data
-        for idx in range(traj.shape[0]):
-            pos = traj[idx]
+        print(traj.shape)
+        for idx in range(len(traj)):
             if idx == 0:
-                cube_pos = traj[0]
-                cube_pos[-1] = 0
-                self.entities['cube'].set_pos(cube_pos)
-                path = self.plan_to_start(pos + np.array([0.0,0,0.05]), grasp_quat) # + np.array([0.1,-0.1,0.2])
-                # self.record_data_once()
-                # self.sphere.set_pos(pos + np.array([0.0,0,0.03]))
-                # self.robot.control_dofs_force(np.array([0.789325]), np.array([self.motors_dof[-1]]))
-                # self.move_to_target(pos + np.array([0.0,0,0.1]), grasp_quat) # + np.array([0.1,0,0.1])
-                self.move_to_target(pos + np.array([0.0,0,0.0]), open_gripper=True)
-                # self.entities['box'].set_pos(traj[-1])
-                self.update_scene(20, record=True)  
+                traj[idx] = self.entities['cube'].get_pos().cpu().numpy()
+                print(f"traj {traj[idx]}")
+                path = self.plan_to_start(traj[idx] + np.array([0.0,0,0.08]), grasp_quat) # + np.array([0.1,-0.1,0.2])
+                self.update_scene(10, record=False)
+                self.record_data_once()
+                for i in range(5):
+                    self.move_to_target(traj[idx], grasp_quat, open_gripper=True)
+                    self.update_scene(10, record=False)
+                    if (i + 1) % 2 == 0:
+                        self.record_data_once()
+                self.record_data_once()
                 for i in range(5):
                     self.close_gripper()
-                    self.update_scene(10,record=True)
-                    # self.record_data_once()
+                    self.update_scene(10, record=False)
+                    if (i + 1) % 2 == 0:
+                        self.record_data_once()
             else:
-                self.move_to_target(pos, open_gripper=False)
-                self.update_scene(10, record=True)
-            # self.record_data_once()
+                for i in range(2):
+                    self.move_to_target(traj[idx], open_gripper=False)
+                    self.update_scene(10, record=False)
+                self.record_data_once()
 
         for i in range(5):
             self.open_gripper()
-            self.update_scene(10, record=True)
+            self.update_scene(20, record=False)
             # self.record_data_once()
+            if (i + 1) % 2 == 0:
+                self.record_data_once()
+        
+        for i in range(5):
+            self.move_to_target(traj[-1] + np.array([0.0,0,0.05]), open_gripper=True)
+            self.update_scene(20, record=False)
+            self.record_data_once()
 
         self.record_data_once(export_video=True)
-       
         target_pos = traj[-1].copy()
         target_pos[-1] = 0
 
@@ -436,7 +444,7 @@ class BaseEnv:
             self.ep_num += 1
 
         self.play_counter += 1
-        print(f"已保存/执行 {self.ep_num}/{ self.play_counter} 轨迹")
+        print(f"已保存 / 执行 {self.ep_num}/{ self.play_counter} 轨迹")
 
         return self.check_success(target_pos)
     
@@ -791,7 +799,12 @@ class BaseEnv:
         #     #     continue
                 
         return traj_tmp
+    
       
+    def test_env(self):
+        for i in range(1000):
+            self.update_scene(10, record=False)
+
 
    
 # 示例用法
@@ -838,9 +851,10 @@ if __name__ == "__main__":
         "handtraj_processor":handtraj_processor
     }
 
-
     ########################## env ##########################
     env = BaseEnv(vis=args.vis, **env_kwargs)
+
+
 
     env.generate_data(hand3d, grasp_pose)
     i = 0

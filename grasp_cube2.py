@@ -21,6 +21,7 @@ class GraspCube(BaseEnv):
         super(GraspCube, self).__init__(**kwargs)
         self.save_dir = kwargs.get('save_dir', "./grasp_cube_h100")
 
+
     def add_objects(self, **kwargs):
         """添加对象"""
         self.entities['cube'] = self.scene.add_entity(
@@ -219,14 +220,14 @@ class GraspCube(BaseEnv):
 
         for i in range(5):
             self.open_gripper()
-            self.update_scene(20, record=False)
+            self.update_scene(10, record=False)
             # self.record_data_once()
             if (i + 1) % 2 == 0:
                 self.record_data_once()
         
         for i in range(5):
             self.move_to_target(traj[-1] + np.array([0.0,0,0.05]), open_gripper=True)
-            self.update_scene(20, record=False)
+            self.update_scene(10, record=False)
             self.record_data_once()
 
         self.record_data_once(export_video=True)
