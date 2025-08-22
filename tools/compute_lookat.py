@@ -23,7 +23,7 @@ def calculate_lookat_point(cam_position, rotation_angles_deg, near=0.1):
     rotation_matrix = rot.as_matrix()
     
     # 相机的前向向量（默认指向世界坐标系x轴正方向）
-    forward = np.array([1, 0, 0])
+    forward = np.array([0, 0, 1])
     
     # 将前向向量转换到世界坐标系
     world_forward = rotation_matrix @ forward
@@ -43,7 +43,7 @@ def main():
     # 基础旋转角度（角度制，单位：度）
     # [0, 0, 0] 表示无旋转
     base_rotation_deg = [0, 0, 0]   # 明确标注为角度制（度）
-    near = 0.05
+    near = cam_position[-1]
     
     # 计算无旋转时的lookat点
     base_lookat, base_forward = calculate_lookat_point(
@@ -51,7 +51,7 @@ def main():
     )
     
     # 旋转角度（角度制，单位：度）
-    rotated_angles_deg = [0, 65, 0]  # 绕y轴旋转90度（角度制）
+    rotated_angles_deg = [0, 0, 0]  # 绕y轴旋转90度（角度制）
     rotated_lookat, rotated_forward = calculate_lookat_point(
         cam_position, rotated_angles_deg, near
     )

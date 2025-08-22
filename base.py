@@ -12,7 +12,7 @@ import pickle
 import cv2
 from copy import deepcopy
 import time
-from utils import rand_pose, decompose_grasppose
+from utils import rand_pose, decompose_grasppose, create_camera_from_pos_euler
 
 from transform_grasp import transform_grasp_pose_euler
 
@@ -21,6 +21,9 @@ faulthandler.enable()  # 运行程序后，段错误时会输出详细堆栈
 import time
 import warnings
 import traceback
+
+current_file_path = os.path.abspath(__file__)
+parent_directory = os.path.dirname(current_file_path)
 
 
 class BaseEnv:
@@ -32,46 +35,83 @@ class BaseEnv:
         self.seed = kwargs.get('seed', 0)
         self.save_data = kwargs.get('save_data', True)
         self.save_dir = kwargs.get('save_dir', "./test_sim_data5")
+        self.save_origin = kwargs.get('save_origin', False)
+        self.save_depth_origin = kwargs.get('save_depth_origin', False)
         self.save_rgb_origin = kwargs.get('save_rgb_origin', True)
         self.save_depth_origin = kwargs.get('save_depth_origin', False)
         self.task_name = kwargs.get('task_name', 'default')
         self.ep_num = kwargs.get('ep_num', 0)
+        self.seed = kwargs.get('seed', 0)
 
         self.handtraj_processor = kwargs.get('handtraj_processor', None)
+
+
+        self.FRAME_IDX = 0
+        self.play_counter = 0
+        self.render_idx = 0
+        self.record_freq = 10
+        self.debug_dir = kwargs.get('debug_dir', None)
+        self.control_qlimit = None
+
+        # Eval参数
+        self.suc = 0
+        self.test_num = 0
+        self.step_lim = kwargs.get('step_limit', 300)
 
         # np.random.seed(self.seed)
         # torch.manual_seed(self.seed)
 
         ########################## init ##########################
         #gs.init(backend=gs.cpu,precision="32",logging_level='debug')
+        # seed=self.seed, 
         gs.init(backend=gs.gpu, precision="32") #point_cloud, mask = camera.render_pointcloud() double free or corruption (out)
         
         # 初始化场景配置
         viewer_options = gs.options.ViewerOptions(
+            res=kwargs.get('camera_pos', (1280, 720)),
             camera_pos=kwargs.get('camera_pos', (3, -1, 1.5)),
             camera_lookat=kwargs.get('camera_lookat', (0.0, 0.0, 0.0)),
             camera_fov=kwargs.get('camera_fov', 30),
             max_FPS=kwargs.get('max_FPS', 60),
         )
 
+        sim_options=gs.options.SimOptions(
+            dt=1e-2,
+            substeps=10,
+        )
+
+        sph_options = gs.options.SPHOptions(
+            particle_size=0.01, # 水分子大小
+            lower_bound=(0.0, -1.0, 0.0),
+            upper_bound=(1.0, 1.0, 2.4),
+        )
+        
+        mpm_options=gs.options.MPMOptions(
+            lower_bound=(0.0, -1.0, 0.0),
+            upper_bound=(1.0, 1.0, 0.55),
+        )
+
         rigid_options = gs.options.RigidOptions(
             box_box_detection=False,
             max_collision_pairs=1000,
-            # use_gjk_collision=True,
-            # enable_mujoco_compatibility=False,
+            use_gjk_collision=True, # GJK 碰撞算法
+            enable_mujoco_compatibility=False, # 不兼容mujoco, 没有从 Mujoco 迁移模型 / 参数的需求（比如没有用 Mujoco 的 URDF 文件、没有复用 Mujoco 的关节限制参数）
             # dt=kwargs.get('dt', 0.01),
         )  
-        
+
         # 创建场景实例
         self.scene = gs.Scene(
+            sim_options=sim_options,
             viewer_options=viewer_options,
             rigid_options=rigid_options,
+            sph_options=sph_options,
+            mpm_options=mpm_options,
             show_viewer=self.vis,
             show_FPS=False,
         )
 
         # 加载机器人, 索引控制具体的关节
-        self.robot, self.end_effector, self.motors_dof, self.fingers_dof = self.load_robot()
+        self.robot = self.load_robot()
 
         # 初始化实体存储,存地板和物体
         self.entities = {}
@@ -93,22 +133,18 @@ class BaseEnv:
         self.add_objects()
         self.add_cameras()
 
-        self.FRAME_IDX = 0
-        self.play_counter = 0
-        self.render_idx = 0
-        self.record_freq = 10
-        self.debug_dir = kwargs.get('debug_dir', None)
-
 
         # 构建场景
         self.scene.build()
         self.scene.reset()
 
-        self.set_robot_dof()
+        self.get_robot_setting()
+        self.set_robot_dof()    
         self.record_objects_init_state()
 
         os.makedirs(self.save_dir, exist_ok=True)
         # self.start_pos = np.array([0.0005, -0.78746, -0.00032, -2.351319, 0.00013, 1.57421, 0.789325,0.04,0.04])
+    
 
     def add_objects(self, **kwargs):
         """添加对象"""
@@ -119,7 +155,7 @@ class BaseEnv:
                                             pos=(0.24623267, -0.04144618, 0.03),
                                             euler=(0.0, 0.0, 0.0),
                                             scale=0.06,
-                                            # decimate=True,
+                                            # decimate=False,
                                             # convexify=False,
                                             # decimate_face_num=50,
                                         ),
@@ -174,10 +210,11 @@ class BaseEnv:
         for entity_name in self.entities.keys():
             if entity_name != 'plane' and entity_name != 'table':
                 self.init_state[entity_name] = {}
-                self.init_state[entity_name]['pos'] = self.entities[entity_name].get_pos().cpu().numpy()
-                self.init_state[entity_name]['quat'] = self.entities[entity_name].get_quat().cpu().numpy()
+                if isinstance(self.entities[entity_name], gs.engine.entities.RigidEntity):
+                    self.init_state[entity_name]['pos'] = self.entities[entity_name].get_pos().cpu().numpy()
+                    self.init_state[entity_name]['quat'] = self.entities[entity_name].get_quat().cpu().numpy()
 
-        # 也可以人工传数state_dict，覆盖原来的
+        # 也可以人工传数state_dict，覆盖原来的,
         if state_dict is not None:
             for entity_name in state_dict: 
                 self.init_state[entity_name] = {}
@@ -185,7 +222,7 @@ class BaseEnv:
                 self.init_state[entity_name]['quat'] = state_dict[entity_name]['quat']
 
     def set_objects_init_state(self):
-        for entity_name in self.entities.keys():
+        for entity_name in self.init_state.keys():
             if entity_name != 'plane' and entity_name != 'table':
                 self.entities[entity_name].set_pos(self.init_state[entity_name]['pos'])
                 self.entities[entity_name].set_quat(self.init_state[entity_name]['quat'])
@@ -220,7 +257,7 @@ class BaseEnv:
         #     gs.morphs.URDF(file="urdf/plane/plane.urdf", fixed=True),
         # )
         self.scene.add_entity(
-            gs.morphs.URDF(file="./assets/plane/plane.urdf", fixed=True),
+            gs.morphs.URDF(file="/mnt/nas/liuqipeng/workspace/simulation/assets/plane/plane.urdf", fixed=True),
         )
 
     def _load_default_table(self):
@@ -236,22 +273,31 @@ class BaseEnv:
         )
 
     def load_robot(self, robot_type='franka', **kwargs):
+
+        # 打印当前工作目录
+        print("当前工作目录:", os.getcwd())
+
+        # 也可以打印文件的绝对路径来验证
+        file_path = f"{parent_directory}/assets/franka_emika_panda/panda.xml"
+        print("文件的绝对路径:", os.path.abspath(file_path))
+
         """加载机械臂，默认是Franka"""
         if robot_type == 'franka':
             robot = self.scene.add_entity(
                 morph=gs.morphs.MJCF(
-                    file="./assets/franka_emika_panda/panda.xml",
-                    pos=kwargs.get('robot_pos', (0.2, -0.75, 0.0)),
+                    file=f"{parent_directory}/assets/franka_emika_panda/panda.xml",
+                    # pos=kwargs.get('robot_pos', (0.2, -0.75, 0.0)),
+                    pos=kwargs.get('robot_pos', (-0.2, -0.25, 0.0)),
                     # pos=kwargs.get('robot_pos', (-0.2, -0.3, 0.0)),
-                    euler=(0, 0, 90),
+                    # euler=(0, 0, 90),
+                    euler=(0, 0, 0),
                     collision=True,
                 ),
             )
             # set control gains
-            end_effector = robot.get_link("hand_tcp")
-            motors_dof = np.arange(7)
-            fingers_dof = np.arange(7, 9)
-            self.start_pos = np.array([0.0005, -0.78746, -0.00032, -2.351319, 0.00013, 1.57421, 0.789325,0.04,0.04])
+
+            # # 计算限制角度的步长
+            # self.joint_step_size = (self.control_qlimit[1] - self.control_qlimit[0]) / 50
         elif robot_type == 'piper':
             robot = self.scene.add_entity(
                 morph=gs.morphs.MJCF(
@@ -262,14 +308,33 @@ class BaseEnv:
                     collision=True,
                 ),
             ) 
-            end_effector = robot.get_link("hand_tcp")
-            motors_dof = np.arange(8)
-            fingers_dof = np.arange(6, 8)
-            self.start_pos = np.array([0] * 6 + [0.04,0.04])
         else:
             raise ValueError(f"不支持的机械臂类型: {robot_type}")
     
-        return robot, end_effector, motors_dof, fingers_dof
+        return robot
+    
+    def get_robot_setting(self, robot_type='franka'):
+
+        if robot_type=="franka":
+            self.end_effector = self.robot.get_link("hand_tcp")
+            self.motors_dof = np.arange(7)
+            self.fingers_dof = np.arange(7, 9)
+            self.start_pos = np.array([0.0005, -0.78746, -0.00032, -2.351319, 0.00013, 1.57421, 0.789325,0.04,0.04])
+            self.control_qlimit = self.robot.get_dofs_limit()
+
+        elif robot_type=="piper":
+            end_effector = self.robot.get_link("hand_tcp")
+            motors_dof = np.arange(8)
+            fingers_dof = np.arange(6, 8)
+            self.start_pos = np.array([0] * 6 + [0.04,0.04])
+            self.control_qlimit = self.robot.get_dofs_limit()
+
+        else:
+            raise ValueError(f"不支持的机械臂类型: {robot_type}")
+        
+        self.control_qlimit = [qlimit.cpu().numpy() for qlimit in self.control_qlimit]
+
+
 
     def add_cameras(self, **kwargs):
         """添加相机"""
@@ -288,21 +353,59 @@ class BaseEnv:
                 fov=kwargs.get('fov', 53),
                 GUI=kwargs.get('GUI', False),
             )
+        
+        # 2. 定义相机参数（pos + 欧拉角 + FOV）
+        pos = (0.5, 1.0, 1.0)         # 相机在世界坐标系的位置
+        euler_angles = (0, 30, 0)     # 欧拉角（角度）：绕x轴0°、y轴30°、z轴0°（zyx顺序）
+        fov = 60                      # 垂直视场角（与内参联动）
+        res = (640, 480)              # 分辨率
+
+        # 3. 创建 Camera 实例
+        # cam_idx = len(self.scene._visualizer._cameras)
+        # camera = create_camera_from_pos_euler(
+        #     visualizer=self.scene._visualizer,
+        #     pos=pos,
+        #     euler_angles=euler_angles,
+        #     fov=fov,
+        #     res=res,
+        #     euler_order="xyz",  # 与传入的欧拉角顺序匹配
+        #     gui=False
+        # )
+        # self.scene._visualizer._cameras.append(camera)
+
+        # cam_idx = len([camera for camera in self._cameras if camera.debug == debug])
+        # scene.add_camera
+        # camera = gs.vis.Camera(
+        # self._visualizer.add_camera(
+        #     res, pos, lookat, up, model, fov, aperture, focus_dist, GUI, spp, denoise, env_idx, debug
+        # )
+        # self._cameras.append(camera)
     
+    # 也会自己建文件夹
     def start_recording(self, debug_camera=None):
         os.makedirs(self.folder_path + "/videos",exist_ok=True)
         if debug_camera is None:
             for camera_name in self.cameras.keys():
                 self.cameras[camera_name].start_recording()
-        else:
+        elif isinstance(debug_camera, str):
             self.cameras[debug_camera].start_recording()
+        elif isinstance(debug_camera, list):
+            for cam_name in debug_camera:
+                self.cameras[cam_name].start_recording()
+        else:
+            raise ValueError(f"start recording 不支持的相机类型: {debug_camera}")
     
     def stop_recording(self, debug_camera=None):
         if debug_camera is None:
             for camera_name in self.cameras.keys():
                 self.cameras[camera_name].stop_recording(self.folder_path + f"/videos/{camera_name}.mp4", fps=30)
-        else:
+        elif isinstance(debug_camera, str):
             self.cameras[debug_camera].stop_recording(self.folder_path + f"/videos/{debug_camera}.mp4", fps=30)
+        elif isinstance(debug_camera, list):
+            for cam_name in debug_camera:
+                self.cameras[cam_name].stop_recording(self.folder_path + f"/videos/{cam_name}.mp4", fps=30)
+        else:
+            raise ValueError(f"stop recording 不支持的相机类型: {debug_camera}")
 
 
     def reset_robot(self):
@@ -453,7 +556,7 @@ class BaseEnv:
         self.robot.set_qpos(self.start_pos)
         self.robot.control_dofs_position(self.start_pos)
 
-    def plan_to_start(self, pos, quat):
+    def plan_to_start(self, pos, quat, record=False):
         # move to pre-grasp pose
         # wxyz
         qpos = self.robot.inverse_kinematics(
@@ -476,12 +579,27 @@ class BaseEnv:
         for i in range(len(path)):
             waypoint = path[i]
             self.robot.control_dofs_position(waypoint)
-            self.update_scene(1, record=True)
-            # if i % 5:
-            #     self.record_data_once()
-            # self.scene.step()
+            self.update_scene(1, record=record)
+
 
         return path
+    
+    def move_to_qpos(self, qpos, fix_gripper=False):
+        min_check = qpos > self.control_qlimit[0]
+        max_check = qpos < self.control_qlimit[1]
+
+        # 生成无效关节的掩码（True表示超出限位）
+        invalid_mask = ~(min_check & max_check)
+
+        # 直接获取所有无效关节的索引
+        invalid_indices = np.where(invalid_mask)[0]
+   
+        if len(invalid_indices) > 0:
+            print(f"关节{invalid_indices}超出限位角", end="\r")
+
+        self.robot.set_qpos(qpos)
+        self.robot.control_dofs_position(qpos)
+
 
     def move_to_target(self, target_pos, target_quat=None, open_gripper=True):
         if target_quat is not None:
@@ -540,11 +658,19 @@ class BaseEnv:
     def update_scene(self, step=2, record=False, debug_camera=None):
         for i in range(1, step + 1):   
             self.scene.step()
-            if record and self.render_idx % self.record_freq == 0:
-                self.record_data_once()
-                return
-            if debug_camera is not None:
-                self.cameras[debug_camera].render()
+            if self.render_idx % self.record_freq == 0:
+                if record:
+                    self.record_data_once()
+                    continue
+
+                if debug_camera is not None and self.render_idx % self.record_freq == 0:
+                    if isinstance(debug_camera, str):
+                        self.cameras[debug_camera].render()
+                    elif isinstance(debug_camera, list):
+                        for cam_name in debug_camera:
+                            self.cameras[cam_name].render()
+                    else:
+                        raise ValueError("debug_camera must be str or list")
             self.render_idx += 1
 
 
@@ -678,6 +804,14 @@ class BaseEnv:
             for camera_name in self.cameras.keys():
                 pkl_dic["observation"][camera_name]['depth'] = self.cameras[camera_name].render(rgb=True, depth=True)[1]
 
+
+        # pointcloud
+        if self.data_type.get("pointcloud", False):
+            for camera_name in self.cameras.keys():
+                pointcloud, mask = self.cameras.render_pointcloud(world_frame=True)
+                pkl_dic["observation"]['camera_name']["pointcloud"] = pointcloud[mask]
+
+
         # endpose
         if self.data_type.get("endpose", True):
             # qpos = self.robot.get_qpos()
@@ -716,6 +850,7 @@ class BaseEnv:
         return pkl_dic
 
 
+
     def check_success(self, target_pos):
         # 获取方块的AABB
         cube_aabb = self.entities['cube'].get_AABB()
@@ -741,6 +876,79 @@ class BaseEnv:
     def save_pkl(self, pkl_dic, file_path):
         with open(file_path, 'wb') as f:
             pickle.dump(pkl_dic, f)
+
+    # 推理一次
+    def apply_dp(self, model, args, debug_camera=["head_camera","front_camera"]):
+        cnt = 0
+        self.test_num += 1
+        np.random.seed(args.get('seed', 0))
+
+        # eval_video_log =  False # args['eval_video_log']
+        self.folder_path = '/mnt/nas/liuqipeng/workspace/simulation/test_dp2/' + str(args['task_name']) +'_' + 'seed' + str(args['seed']) + "_ep" + str(self.test_num)
+        self.record_freq = 20
+
+        success_flag = False
+        # self._update_render()
+        # if self.render_freq:
+        #     self.viewer.render()
+
+        print("Start Inference: {}".format(self.test_num))
+        
+        self.reset_env()
+        self.update_scene(10, record=False)
+
+        if debug_camera is not None:
+            self.start_recording(debug_camera=debug_camera)
+
+        while cnt < self.step_lim:
+            observation = self.get_obs()
+            obs = self.get_cam_obs(observation)
+
+            obs['agent_pos'] = observation['joint_action']
+            model.update_obs(obs)
+            
+            actions = model.get_action()
+            obs = model.get_last_obs()
+
+            arm_actions , gripper , current_qpos, path = [], [], [], []
+            arm_actions, right_gripper = actions[:, :7],actions[:, 7:9]
+            current_qpos = obs['agent_pos'][:7]
+
+            n_step = arm_actions.shape[0]
+            # path = np.vstack((current_qpos, arm_actions))
+
+            for i in range(n_step):
+                for i in range(1):
+                    self.move_to_qpos(actions[i])
+                    self.update_scene(10, debug_camera=["head_camera","front_camera"])
+                    # print(f"arm_actions: {actions}")
+                # self.record_data_once()
+                    target_pos = self.init_state['box'].copy()
+                    target_pos[-1] = 0
+
+                    if self.check_success(target_pos):
+                        success_flag = True
+                        self.update_scene(10, record=False)
+                        # self.record_data_once(export_video=True)
+                        break
+
+            observation = self.get_obs()
+            obs = self.get_cam_obs(observation)
+            obs['agent_pos'] = observation['joint_action']
+            model.update_obs(obs) # obs是队列来的
+            print(" infer = ", cnt, "step_lim = ", self.step_lim, end="\r")
+            
+            if success_flag:
+                print("success !")
+                break
+
+            cnt += 1
+        
+        
+        if debug_camera is not None:
+            self.stop_recording(debug_camera=debug_camera)
+  
+        return success_flag
 
     def generate_traj(self, hand_traj):
         hand_traj, _ = self.handtraj_processor.get_center_trajectory(hand_traj, is_list_format=True)
@@ -800,10 +1008,21 @@ class BaseEnv:
                 
         return traj_tmp
     
-      
-    def test_env(self):
-        for i in range(1000):
+
+    def get_cam_obs(self, observation: dict) -> dict:
+        cam_obs = {}
+        for cam_name in observation['observation'].keys():
+            cam_obs[cam_name.replace("camera","cam")] = np.moveaxis(observation['observation'][cam_name]['rgb'], -1, 0) / 255
+
+        return cam_obs
+    
+    def repeat_traj(self, traj_list):
+        for qpos in traj_list:
+            self.move_to_qpos(qpos)
             self.update_scene(10, record=False)
+        
+
+
 
 
    
@@ -854,10 +1073,16 @@ if __name__ == "__main__":
     ########################## env ##########################
     env = BaseEnv(vis=args.vis, **env_kwargs)
 
-
-
     env.generate_data(hand3d, grasp_pose)
     i = 0
+
+
+
+            # with open(load_dir+f'/episode{current_ep}'+f'/pkl/{file_num}.pkl', 'rb') as file:
+            #     data = pickle.load(file)
+    env.repeat_traj()
+
+
     # 使用原始起点生成轨迹
     # for idx in range(len(grasp_pose)):
     #     pose = grasp_pose[idx]

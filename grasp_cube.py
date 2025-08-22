@@ -16,9 +16,9 @@ seed_everything(60)
 # import gc
 # gc.collect()
 
-class GraspCube(BaseEnv):
+class grasp_cube(BaseEnv):
     def __init__(self, **kwargs):
-        super(GraspCube, self).__init__(**kwargs)
+        super(grasp_cube, self).__init__(**kwargs)
         self.save_dir = kwargs.get('save_dir', "./grasp_cube_h100")
 
     def add_objects(self, **kwargs):
@@ -72,7 +72,6 @@ class GraspCube(BaseEnv):
         grasp_pose = augment_grasps_with_interpolation(grasp_pose, num_interpolations=5)
 
         # return grasp_pose
-        
         for idx in range(len(grasp_pose)):
             if debug:
                 self.folder_path = f"{self.save_dir}/{self.task_name}/episode{self.ep_num}/"
@@ -144,19 +143,6 @@ class GraspCube(BaseEnv):
                         rand_pose_counter[i] += 1
                         print(f"{quat} 抓取成功")
 
-                    # if success:
-                    #     self.reset_env()
-                    #     self.play_traj(traj.copy(), np.array([0,1,0,0]), save_data=True)
-                    #     print(f"grasp [0,1,0,0] 成功")
-
-                    # self.reset_env()
-                    # success = self.play_traj(traj.copy(), quat, save_data=False)
-                    
-                    # if not success:
-                    #     self.reset_env()
-                    #     self.play_traj(traj.copy(), quat, save_data=True)
-                    #     print(f"grasp {euler_angles} 成功")
-                    #     rand_pose_counter[i] += 1
 
                     print(f"物体当前第{i}的pose, 已保存{self.ep_num}个运动轨迹")
                     time.sleep(0.5)
@@ -172,7 +158,7 @@ class GraspCube(BaseEnv):
         2. 再移动机械臂到目标位置
         '''
         self.save_data = save_data
-        print(traj.shape)
+        # print(traj.shape)
         for idx in range(len(traj)):
             if idx == 0:
                 traj[idx] = self.entities['cube'].get_pos().cpu().numpy()
@@ -210,7 +196,7 @@ class GraspCube(BaseEnv):
             self.record_data_once()
 
         self.record_data_once(export_video=True)
-        target_pos = traj[-1].copy()
+        target_pos = self.init_state['box'].copy()
         target_pos[-1] = 0
 
         if save_data:
@@ -220,6 +206,9 @@ class GraspCube(BaseEnv):
         print(f"已保存 / 执行 {self.ep_num}/{ self.play_counter} 轨迹")
 
         return self.check_success(target_pos)
+
+
+    
 
         
 
@@ -270,7 +259,7 @@ if __name__ == "__main__":
     }
 
     ########################## env ##########################
-    env = GraspCube(vis=args.vis, **env_kwargs)
+    env = grasp_cube(vis=args.vis, **env_kwargs)
 
     if not os.path.exists("env_valid_pose.npy"):
         grasp_pose = env.check_grasp(grasp_pose)

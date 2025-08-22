@@ -10,24 +10,24 @@ from utils import augment_grasps_with_interpolation, seed_everything
 from scipy.spatial.transform import Rotation as R
 from transform_grasp import quat_to_rotation_matrix
 import time
-seed_everything(60)
+# seed_everything(60)
 
-# gs.destroy()
-# import gc
-# gc.collect()
+'''
+只是机械臂位置不一样
+'''
 
-class GraspCube(BaseEnv):
+class grasp_cube2(BaseEnv):
     def __init__(self, **kwargs):
-        super(GraspCube, self).__init__(**kwargs)
+        super(grasp_cube2, self).__init__(**kwargs)
         self.save_dir = kwargs.get('save_dir', "./grasp_cube_h100")
-
+        
 
     def add_objects(self, **kwargs):
         """添加对象"""
         self.entities['cube'] = self.scene.add_entity(
                                         morph=gs.morphs.Mesh(
                                             # file=f"{asset_path}/allegro_hand/allegro_hand_right_glb.urdf",
-                                            file="./assets/wood_cube.glb",
+                                            file="/mnt/nas/liuqipeng/workspace/simulation/assets/wood_cube.glb",
                                             pos=(0.24623267, -0.04144618, 0.03),
                                             euler=(0.0, 0.0, 0.0),
                                             scale=0.08,
@@ -43,7 +43,7 @@ class GraspCube(BaseEnv):
         self.entities['box'] = self.scene.add_entity(
                                 morph=gs.morphs.Mesh(
                                     # file=f"{asset_path}/allegro_hand/allegro_hand_right_glb.urdf",
-                                    file="./assets/blue_box.glb",
+                                    file="/mnt/nas/liuqipeng/workspace/simulation/assets/blue_box.glb",
                                     pos=(0.21407672, -0.26041815,  0.02),
                                     euler=(90, 0.0, 90),
                                     scale=(0.22, 0.1, 0.22), 
@@ -166,25 +166,26 @@ class GraspCube(BaseEnv):
         print(f"失败的episode: {fail_ep}")
 
     
-    def load_robot(self, robot_type='franka', **kwargs):
-        """加载机械臂，默认是Franka"""
-        if robot_type == 'franka':
-            robot = self.scene.add_entity(
-                morph=gs.morphs.MJCF(
-                    file="./assets/franka_emika_panda/panda.xml",
-                    pos=kwargs.get('robot_pos', (-0.2, -0.25, 0.0)),
-                    # pos=kwargs.get('robot_pos', (-0.2, -0.3, 0.0)),
-                    euler=(0, 0, 0),
-                    collision=True,
-                ),
-            )
-            # set control gains
-            end_effector = robot.get_link("hand_tcp")
-            motors_dof = np.arange(7)
-            fingers_dof = np.arange(7, 9)
-            self.start_pos = np.array([0.0005, -0.78746, -0.00032, -2.351319, 0.00013, 1.57421, 0.789325,0.04,0.04])
+    # def load_robot(self, robot_type='franka', **kwargs):
+    #     """加载机械臂，默认是Franka"""
+    #     if robot_type == 'franka':
+    #         robot = self.scene.add_entity(
+    #             morph=gs.morphs.MJCF(
+    #                 file="/mnt/nas/liuqipeng/workspace/simulation/assets/franka_emika_panda/panda.xml",
+    #                 pos=kwargs.get('robot_pos', (-0.2, -0.25, 0.0)),
+    #                 # pos=kwargs.get('robot_pos', (-0.2, -0.3, 0.0)),
+    #                 euler=(0, 0, 0),
+    #                 collision=True,
+    #             ),
+    #         )
+    #         # set control gains
+    #         end_effector = robot.get_link("hand_tcp")
+    #         motors_dof = np.arange(7)
+    #         fingers_dof = np.arange(7, 9)
+    #         self.start_pos = np.array([0.0005, -0.78746, -0.00032, -2.351319, 0.00013, 1.57421, 0.789325,0.04,0.04])
 
-        return robot, end_effector, motors_dof, fingers_dof
+    #     return robot, end_effector, motors_dof, fingers_dof
+
     
     def play_traj(self, traj, grasp_quat, save_data=False):
         '''
@@ -292,7 +293,7 @@ if __name__ == "__main__":
     }
 
     ########################## env ##########################
-    env = GraspCube(**env_kwargs)
+    env = grasp_cube2(**env_kwargs)
 
     pose_npy = "env_valid_pose2.npy"
     if not os.path.exists(pose_npy):

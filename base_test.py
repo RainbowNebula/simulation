@@ -597,7 +597,7 @@ if __name__ == "__main__":
 
 
     ########################## env ##########################
-    env = BaseEnv(vis=args.vis, **env_kwargs)
+    # env = BaseEnv(vis=args.vis, **env_kwargs)
 
     handtraj_processor = HandTrajProcess(
         dmp_execution_time=2.0,
@@ -633,30 +633,33 @@ if __name__ == "__main__":
         # if idx == 0:
         #     position = np.array([0.6 , 0.0 ,  0.3])
         #     quat = np.array([1 ,  0, 0, 0])
+        
+        promp_traj, _ = handtraj_processor.apply_promp(center_traj, start_pos=center_traj[0].astype(np.float64))
 
-        dmp_traj = handtraj_processor.apply_dmp(center_traj, start_pos=position.astype(np.float64))
-        promp_traj, _ = handtraj_processor.apply_promp(center_traj, start_pos=position.astype(np.float64))
+        dmp_traj = handtraj_processor.apply_dmp(promp_traj, start_pos=center_traj[0].astype(np.float64),goal_pos=np.array([1.0, 0.5, 0.5]))
+      
         # promp_original, _ = traj_processor.apply_promp(center_traj)
         print(f"第{i}个目标位姿")
         i += 1
-        # handtraj_processor.visualize_primitives(
-        #     original_traj=center_traj,
-        #     # dmp_traj=dmp_traj,
-        #     promp_traj=promp_traj,
-        #     output_path="results/original_starts.png",
-        #     show_plot=True
-        # )
+        handtraj_processor.visualize_primitives(
+            original_traj=center_traj,
+            dmp_traj=dmp_traj,
+            promp_traj=promp_traj,
+            output_path="results/original_starts.png",
+            show_plot=True
+        )
+        break
         # success = env.play_traj(promp_traj, np.array([0,1,0,0]))
         # if success:
         #     env.play_traj(promp_traj, np.array([0,1,0,0]), save_data=True)
         #     print(f"[0,1,0,0] 成功")
       
-        success = env.play_traj(promp_traj, quat[[3,0,1,2]])
+        # success = env.play_traj(promp_traj, quat[[3,0,1,2]])
         # if success:
         #     env.play_traj(promp_traj, np.array([0,1,0,0]), save_data=True)
         #     print(f"{quat[[3,0,1,2]]} 成功")
         
-        print(f"已保存{env.ep_num}个运动轨迹")
+        # print(f"已保存{env.ep_num}个运动轨迹")
         # print(finger_verts[idx])
         # env.move_to_start()
         # env.move_to_fingers(finger_verts[idx], quat[[3,0,1,2]])

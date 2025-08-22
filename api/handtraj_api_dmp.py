@@ -109,7 +109,7 @@ class HandTrajProcess:
             "n_weights_per_dim": 100
         }
         self.promp_params = {
-            "n_weights_per_dim": 10
+            "n_weights_per_dim": 20
         }
         
         # 更新参数
@@ -220,7 +220,9 @@ class HandTrajProcess:
                 n_dims=3,
                 execution_time=self.dmp_params["execution_time"],
                 dt=self.dmp_params["dt"],
-                n_weights_per_dim=self.dmp_params["n_weights_per_dim"]
+                n_weights_per_dim=self.dmp_params["n_weights_per_dim"],
+                alpha_y=15.0, 
+                beta_y=3.75
             )
             # 生成时间轴
             T = np.linspace(0, self.dmp_params["execution_time"], len(trajectory))

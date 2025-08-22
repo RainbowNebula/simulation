@@ -16,7 +16,7 @@ def main():
     parser.add_argument('-head_camera_type', type=str, required=False,default="D455")
     parser.add_argument('-expert_data_num', type=int, required=False,default=0,
                         help='Number of episodes to process (e.g., 50)')
-    parser.add_argument('-data_dir', type=str, required=False,default='/mnt/nas/liuqipeng/workspace/simulation/grasp_cube_h100/object_manipulation')
+    parser.add_argument('-data_dir', type=str, required=False,default='/mnt/nas/liuqipeng/workspace/simulation/sim_data/grasp_cube_h100/grasp_cube')
     args = parser.parse_args()
 
     task_name = args.task_name
@@ -31,7 +31,7 @@ def main():
     
     total_count = 0
 
-    save_dir = f'./policy/Diffusion-Policy/data/{task_name}_{head_camera_type}_{num}.zarr'
+    save_dir = f'./policy/Diffusion-Policy/data/{task_name}_{head_camera_type}_{num}_2.zarr'
 
     if os.path.exists(save_dir):
         shutil.rmtree(save_dir)
@@ -44,8 +44,9 @@ def main():
 
     head_camera_arrays, front_camera_arrays, left_camera_arrays, right_camera_arrays = [], [], [], []
     episode_ends_arrays, action_arrays, state_arrays, joint_action_arrays = [], [], [], []
+    front_camera_arrays = []
     
-
+    cnt = 0
     while current_ep < num:
         if not os.path.isdir(load_dir+f'/episode{current_ep}'):
             current_ep += 1
@@ -54,13 +55,23 @@ def main():
         file_num = 0
         
         while os.path.exists(load_dir+f'/episode{current_ep}'+f'/pkl/{file_num}.pkl'):
+            
+            # 包含plan2start的情况 
+            # if cnt != 0 or file_num < 100:
+            #     cnt += 1
+            #     continue
+            # if file_num % 2 != 0:
+            #     continue
+
             with open(load_dir+f'/episode{current_ep}'+f'/pkl/{file_num}.pkl', 'rb') as file:
                 data = pickle.load(file)
             
+            front_img = data['observation']['front_camera']['rgb']
             head_img = data['observation']['head_camera']['rgb']
             action = data['endpose']['endpose']
             joint_action = data['joint_action']
-
+            
+            front_camera_arrays.append(front_img)
             head_camera_arrays.append(head_img)
             action_arrays.append(action)
             state_arrays.append(joint_action)
@@ -79,6 +90,7 @@ def main():
     state_arrays = np.array(state_arrays)
     head_camera_arrays = np.array(head_camera_arrays)
     joint_action_arrays = np.array(joint_action_arrays)
+    front_camera_arrays = np.array(front_camera_arrays)
 
     # import ipdb
     # ipdb.set_trace()
@@ -89,6 +101,8 @@ def main():
     state_chunk_size = (100, state_arrays.shape[1])
     joint_chunk_size = (100, joint_action_arrays.shape[1])
     head_camera_chunk_size = (100, *head_camera_arrays.shape[1:])
+
+    zarr_data.create_dataset('front_camera', data=front_camera_arrays, chunks=head_camera_chunk_size, overwrite=True, compressor=compressor)
     zarr_data.create_dataset('head_camera', data=head_camera_arrays, chunks=head_camera_chunk_size, overwrite=True, compressor=compressor)
     zarr_data.create_dataset('tcp_action', data=action_arrays, chunks=action_chunk_size, dtype='float32', overwrite=True, compressor=compressor)
     zarr_data.create_dataset('state', data=state_arrays, chunks=state_chunk_size, dtype='float32', overwrite=True, compressor=compressor)

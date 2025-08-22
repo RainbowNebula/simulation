@@ -6,6 +6,7 @@ from scipy.spatial.transform import Slerp
 
 import random
 import torch
+import genesis as gs
 
 
 def augment_grasps_with_interpolation(grasp_poses, num_interpolations=5):
@@ -185,7 +186,75 @@ def rand_pose(
     angles_deg = np.rad2deg(angles_rad)
 
     return position, rotate_quat, angles_deg
-    
+
+
+def create_camera_from_pos_euler(
+    visualizer,
+    pos: tuple | list,               # 相机位置 (x, y, z)
+    euler_angles: tuple | list,      # 欧拉角（角度制）(rx, ry, rz)
+    fov: float,                      # 垂直视场角（必传，与 intrinsics 联动）
+    res: tuple = (640, 480),         # 分辨率 (width, height)
+    euler_order: str = "zyx",        # 欧拉角旋转顺序（scipy 支持格式）
+    model: str = "pinhole",          # 相机模型：pinhole / thinlens
+    gui: bool = False,
+    near: float = 0.05,
+    far: float = 100.0,
+    env_idx: int = 0,                # 单环境固定为 0
+    intrinsics: np.ndarray = None  # 自定义内参（3x3），可选
+):
+    """
+    单环境下，从 pos（位置）、欧拉角（角度）创建 Camera 实例
+    完全适配 genesis 的 Camera 类，优先使用类自带工具函数
+    """
+    # ----------------------
+    # 1. 欧拉角 → 旋转矩阵 → 相机姿态（pos/lookat/up）
+    # ----------------------
+    # scipy 欧拉角转旋转矩阵（角度制直接传入）
+    rot = R.from_euler(euler_order, euler_angles, degrees=True)
+    rotation_matrix = rot.as_matrix()  # 3x3 旋转矩阵（世界→相机的旋转）
+
+    # 从旋转矩阵推导 lookat 和 up（基于相机坐标系默认朝向）
+    # 相机默认朝向：z轴向前（lookat 方向）、y轴向上（up 方向）
+    pos_np = np.array(pos, dtype=np.float32)
+    # lookat = 相机位置 + 旋转矩阵变换后的 z 轴（前向）
+    lookat_np = pos_np + rotation_matrix @ np.array([0, 0, -1], dtype=np.float32)  # 注意：z轴负方向为前向（符合视觉习惯）
+    # up = 旋转矩阵变换后的 y 轴（向上）
+    up_np = rotation_matrix @ np.array([0, 1, 0], dtype=np.float32)
+
+    # ----------------------
+    # 2. 初始化 Camera 实例
+    # ----------------------
+    # 直接传入 pos/lookat/up（无需手动构造 transform，类内部会自动处理）
+    camera = gs.vis.Camera(
+        visualizer=visualizer,
+        idx=env_idx,  # 单环境下索引与 env_idx 一致
+        model=model,
+        res=res,
+        pos=pos_np.tolist(),
+        lookat=lookat_np.tolist(),
+        up=up_np.tolist(),
+        fov=fov,
+        GUI=gui,
+        near=near,
+        far=far,
+        env_idx=env_idx,  # 绑定单环境
+        debug=False
+    )
+
+    # ----------------------
+    # 3. 构建相机并设置参数
+    # ----------------------
+    camera.build()  # 必须调用 build() 初始化内部张量（_multi_env_*）
+
+    # （可选）设置自定义内参（需与 FOV 匹配，否则类会报错）
+    if intrinsics is not None:
+        if intrinsics.shape != (3, 3):
+            raise ValueError(f"自定义内参必须是 3x3 矩阵，当前形状：{intrinsics.shape}")
+        # set_params 会自动校验内参与 FOV 的一致性
+        camera.set_params(intrinsics=intrinsics, fov=fov)
+
+    return camera
+
 
 
 def seed_everything(seed):

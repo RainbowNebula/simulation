@@ -85,7 +85,7 @@ def visualize_all_joint_trajectories(hand3d_data, output_path="hand_trajectory.p
 
 
 def visualize_hand_center_trajectory_list(hand3d_data, output_path="hand_center_trajectory.png", 
-                                    title="手部中心3D轨迹可视化", show_plot=False):
+                                    title="手部中心3D轨迹可视化", frame_idx=[0], show_plot=False):
     """
     可视化手部中心的3D轨迹（以所有关键点的中心作为手部中心）
     
@@ -121,7 +121,11 @@ def visualize_hand_center_trajectory_list(hand3d_data, output_path="hand_center_
             continue
             
         # 计算并存储当前帧的手部中心
-        frame_center = np.mean(frame_points, axis=0)
+        if frame_idx is None:
+            frame_center = np.mean(frame_points, axis=0)
+        else:
+            frame_center = np.mean(frame_points[frame_idx],axis=0)
+            
         hand_centers.append(frame_center)
         valid_frames.append(i)
     
@@ -268,7 +272,7 @@ if __name__ == "__main__":
     # hand3d = np.load('/mnt/nas/liuqipeng/data/20250710-2126/video/demo_vggt/hand_3d.npy')
     # print(hand3d.shape) 
 
-    hand3d = pickle.load(open('/home/haichao/workspace/real2sim/simulation/data/20250716-2018/video/demo_stero/stero_hand_3d.pkl', 'rb'))
+    hand3d = pickle.load(open('/mnt/nas/liuqipeng/workspace/simulation/tools/data/20250821-2210-59/video/demo_stero/stero_hand_3d.pkl', 'rb'))
     # hand3d = [i for i in hand3d if len(i) > 0]
     # hand3d = hand3d[60:165]
     
@@ -283,7 +287,7 @@ if __name__ == "__main__":
     
     # 可视化手部中心轨迹
     visualize_hand_center_trajectory_list(
-        hand3d_data=hand3d,
+        hand3d_data=hand3d[81:],
         output_path="results/demo_vggt.png",
         title="Hand (center of 21 keypoints) 3D Traj",
         show_plot=True
