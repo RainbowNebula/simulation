@@ -152,8 +152,10 @@ sim_data2/
 data/
 results/
 third_party/
+asserts/
 
 
+*.zarr
 *.png
 *.jpg
 *.jpeg
